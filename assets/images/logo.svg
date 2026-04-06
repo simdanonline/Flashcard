@@ -1,0 +1,21 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1024" height="1024" rx="224" fill="#1E293B"/>
+
+  <!-- Back card (offset) -->
+  <rect x="260" y="200" width="480" height="320" rx="32" fill="#334155" stroke="#475569" stroke-width="4"/>
+
+  <!-- Front card -->
+  <rect x="220" y="240" width="480" height="320" rx="32" fill="#F8FAFC" stroke="#E2E8F0" stroke-width="4"/>
+
+  <!-- Horizontal line on front card (representing text) -->
+  <rect x="300" y="370" width="320" height="8" rx="4" fill="#CBD5E1"/>
+  <rect x="340" y="400" width="240" height="8" rx="4" fill="#CBD5E1"/>
+  <rect x="360" y="430" width="200" height="8" rx="4" fill="#CBD5E1"/>
+
+  <!-- Lightning bolt (centered below cards) -->
+  <path d="M540 600 L480 720 L530 720 L490 830 L590 690 L535 690 L580 600 Z" fill="#3B82F6"/>
+
+  <!-- Small accent glow behind bolt -->
+  <path d="M540 600 L480 720 L530 720 L490 830 L590 690 L535 690 L580 600 Z" fill="#3B82F6" opacity="0.3" transform="scale(1.08) translate(-22, -30)"/>
+</svg>

@@ -1,98 +1,162 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
-
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  useColorScheme,
+} from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { Link } from 'expo-router';
+import { useDueCards } from '@/hooks/useDueCards';
+import { useSettings } from '@/hooks/useSettings';
+import { FlashCard } from '@/components/FlashCard';
+import { DifficultyButtons } from '@/components/DifficultyButtons';
+import { EmptyState } from '@/components/EmptyState';
+import { updateCardReview } from '@/lib/cardRepository';
+import { computeNextReviewAt, parseSQLiteDatetime } from '@/lib/scheduler';
+import { scheduleCardDueNotification } from '@/lib/notifications';
+import { Colors } from '@/constants/theme';
+import type { Difficulty } from '@/lib/types';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+export default function StudyScreen() {
+  const { cards, loading, refresh } = useDueCards();
+  const { settings } = useSettings();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const colorScheme = useColorScheme();
+  const colors = Colors[colorScheme ?? 'light'];
+
+  // Re-check for newly due cards every 30 seconds while tab is focused
+  useFocusEffect(
+    useCallback(() => {
+      const interval = setInterval(() => {
+        refresh();
+      }, 30_000);
+      return () => clearInterval(interval);
+    }, [refresh])
+  );
+
+  const currentCard = cards[currentIndex] ?? null;
+
+  const handleRate = useCallback(
+    async (difficulty: Difficulty) => {
+      if (!currentCard) return;
+
+      const nextReviewAt = computeNextReviewAt(difficulty, settings);
+      await updateCardReview(currentCard.id, nextReviewAt, difficulty);
+
+      // Schedule notification for when card becomes due again
+      await scheduleCardDueNotification(
+        currentCard.id,
+        parseSQLiteDatetime(nextReviewAt)
+      );
+
+      setIsFlipped(false);
+      if (currentIndex < cards.length - 1) {
+        setCurrentIndex((prev) => prev + 1);
+      } else {
+        setCurrentIndex(0);
+        await refresh();
+      }
+    },
+    [currentCard, currentIndex, cards.length, settings, refresh]
+  );
+
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!currentCard) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <EmptyState
+          title="All caught up!"
+          message="No cards are due for review right now. Come back later or add new cards."
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
+        <Link href="/card/new" asChild>
+          <Pressable style={styles.addButton}>
+            <Text style={styles.addButtonText}>Create a Card</Text>
+          </Pressable>
         </Link>
+      </View>
+    );
+  }
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={styles.header}>
+        <Text style={[styles.progress, { color: colors.icon }]}>
+          {currentIndex + 1} / {cards.length}
+        </Text>
+        <Link href="/settings" asChild>
+          <Pressable>
+            <Text style={[styles.settingsLink, { color: colors.tint }]}>
+              Settings
+            </Text>
+          </Pressable>
+        </Link>
+      </View>
+
+      <View style={styles.cardContainer}>
+        <FlashCard
+          front={currentCard.front}
+          back={currentCard.back}
+          isFlipped={isFlipped}
+          onPress={() => setIsFlipped(!isFlipped)}
+        />
+      </View>
+
+      {isFlipped && (
+        <DifficultyButtons settings={settings} onRate={handleRate} />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    padding: 16,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  progress: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  settingsLink: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  cardContainer: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  addButton: {
+    backgroundColor: '#3b82f6',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  addButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

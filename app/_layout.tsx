@@ -1,22 +1,43 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
+import { useDatabase } from '@/hooks/useDatabase';
+import {
+  requestPermissions,
+  setupNotificationHandler,
+} from '@/lib/notifications';
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const { isReady } = useDatabase();
+
+  useEffect(() => {
+    setupNotificationHandler();
+    requestPermissions();
+  }, []);
+
+  if (!isReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        <Stack.Screen
+          name="settings"
+          options={{ presentation: 'modal', title: 'Settings' }}
+        />
+        <Stack.Screen name="card/new" options={{ title: 'New Card' }} />
+        <Stack.Screen name="card/[id]" options={{ title: 'Edit Card' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>
